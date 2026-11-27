@@ -30,6 +30,10 @@ python -m compileall -q strata
 - `coverage` 显示各文件受已知介质问题的影响。取回未涉及损坏对象的文件仍可继续。
 - `holds/{reference}` 支持固定与解除版本。头版本、仍在保留期的版本和引用未解除的版本会阻止退役，退役保留版本清单和事件。
 - `/operations/scan` 分页重新读取介质。事件编号用于把修复请求绑定到仍有效的损坏记录。一次修复会恢复该对象被多个版本共享的字节。
+- `/operations/repairs` 向外馆发出可核对的修复请求：`POST` 提交 `token` 与一组 `incidents`，回执按每个对象列出可信清单中的文件路径、分片序号、分片偏移、分片长度和文件摘要。`GET /operations/repairs/{id}` 可重新查看该请求。已退役的版本只作为来源出现在清单里，服务不会因此重发其库内字节。
+- 外馆用仍持有的文件和保存过的引用制备交割：`python -m strata.field salvage 持有目录 交割目录 --request 请求文件`。它按请求给出的位置逐片核对摘要，把可证实的片连同出处装入交割，并列出无法提供的对象。
+- 交割通过 `PUT /operations/repairs/{id}/materials/{digest}` 送材料，再以 `POST /operations/repairs/{id}/settlements` 提交 `token` 与 `materials` 结算。也可让外馆直接执行 `python -m strata.field deliver 交割目录 --vault-url …`。服务器按当前仍有效的损坏记录逐片受理：出处、文件和分片位置都能对上才修复，未提供的片保留各自原因。旧响应不会关闭后来新开的记录，同一交割中无冲突的片仍会结算。
+- 重送同一交割令牌会看回同一批已结算的情况，服务器重启后仍可重复提交。`GET /operations/repairs/{id}/settlements/{token}` 按令牌取回回执。
 - `/operations/forecast` 与馆藏的 `footprint` 分别显示全库待回收对象和馆藏的保护占用。先执行 `expire` 释放已到期会话的收据，再用 `mark` 和 `sweep` 回收。已标记对象会暂停接收新收据，回收进程重启后可继续。
 - `/operations/reconcile` 可核对未入目录的物理文件，默认只读。`/operations/staging-cleanup` 清理中断写入的临时文件。
 - `/operations/audit` 检查目录中的版本链、保留、清单和收据关系。介质字节另由扫描验证。`/events` 可查库级事件或按馆藏过滤。

@@ -10,6 +10,7 @@ from strata.preservation.custody import Custody
 from strata.preservation.footprint import Footprint
 from strata.preservation.integrity import Integrity
 from strata.preservation.inspection import Inspection
+from strata.preservation.repairs import Repairs
 from strata.runtime.database import Database
 from strata.runtime.events import page
 from strata.runtime.media import Media
@@ -27,6 +28,7 @@ class Vault:
         self.inspection = Inspection(self.db)
         self.audit = Audit(self.db)
         self.footprint = Footprint(self.db)
+        self.repairs = Repairs(self.db, self.media, root / "handoff")
         self.delivery = Delivery(self.db, self.media, root / "scratch")
 
     def events(self, collection: str | None, after: int, limit: int) -> dict:

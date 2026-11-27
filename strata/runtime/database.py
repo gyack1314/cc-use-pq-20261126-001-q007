@@ -123,6 +123,46 @@ SCHEMA = (
     )
     """,
     "CREATE INDEX IF NOT EXISTS events_by_collection ON events(collection,id)",
+    """
+    CREATE TABLE IF NOT EXISTS repair_requests(
+        id TEXT PRIMARY KEY,
+        token TEXT NOT NULL UNIQUE,
+        fingerprint TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        body TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS repair_targets(
+        request TEXT NOT NULL REFERENCES repair_requests(id),
+        digest TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        incident INTEGER NOT NULL,
+        reason TEXT NOT NULL,
+        PRIMARY KEY(request,digest)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS repair_materials(
+        request TEXT NOT NULL,
+        digest TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        received_at INTEGER NOT NULL,
+        PRIMARY KEY(request,digest),
+        FOREIGN KEY(request,digest) REFERENCES repair_targets(request,digest)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS repair_settlements(
+        request TEXT NOT NULL REFERENCES repair_requests(id),
+        token TEXT NOT NULL,
+        fingerprint TEXT NOT NULL,
+        settled_at INTEGER NOT NULL,
+        receipt TEXT NOT NULL,
+        PRIMARY KEY(request,token)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS repair_request_token ON repair_requests(token)",
 )
 
 
@@ -133,12 +173,12 @@ class Database:
         path.parent.mkdir(parents=True, exist_ok=True)
         with self.transaction() as connection:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1):
+            if version not in (0, 1, 2):
                 raise RuntimeError(f"Unsupported vault catalog version {version}")
-            if version == 0:
+            if version in (0, 1):
                 for statement in SCHEMA:
                     connection.execute(statement)
-                connection.execute("PRAGMA user_version=1")
+                connection.execute("PRAGMA user_version=2")
 
     def now(self) -> int:
         return self.clock()

@@ -31,6 +31,18 @@ class HoldInput(BaseModel):
     reason: StrictStr
 
 
+class RepairRequestInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    token: StrictStr
+    incidents: list[StrictInt]
+
+
+class RepairSettlementInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    token: StrictStr
+    materials: list[dict]
+
+
 def create_app(root: Path, *, clock=None) -> FastAPI:
     vault = Vault(root, clock)
     app = FastAPI(title="Strata Vault", version="1.0.0")
@@ -144,6 +156,28 @@ def create_app(root: Path, *, clock=None) -> FastAPI:
         size = await run_in_threadpool(vault.integrity.repair_size, digest, incident_id)
         with await uploaded(request, size, vault.delivery.scratch) as source:
             return await run_in_threadpool(vault.integrity.repair, digest, incident_id, source)
+
+    @app.post("/operations/repairs", status_code=201)
+    def open_repair(body: RepairRequestInput):
+        return vault.repairs.open(body.token, body.incidents)
+
+    @app.get("/operations/repairs/{request}")
+    def get_repair(request: str):
+        return vault.repairs.get(request)
+
+    @app.put("/operations/repairs/{request}/materials/{digest}")
+    async def receive_repair_material(request: str, digest: str, body: Request):
+        size = await run_in_threadpool(vault.repairs.material_size, request, digest)
+        with await uploaded(body, size, vault.delivery.scratch) as source:
+            return await run_in_threadpool(vault.repairs.receive_material, request, digest, source)
+
+    @app.post("/operations/repairs/{request}/settlements", status_code=201)
+    def settle_repair(request: str, body: RepairSettlementInput):
+        return vault.repairs.settle(request, body.token, body.materials)
+
+    @app.get("/operations/repairs/{request}/settlements/{token}")
+    def get_repair_settlement(request: str, token: str):
+        return vault.repairs.settlement(request, token)
 
     @app.get("/events")
     def events(collection: str | None = None, after: int = 0, limit: int = 50):

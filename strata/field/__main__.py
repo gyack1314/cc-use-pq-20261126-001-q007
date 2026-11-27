@@ -5,8 +5,10 @@ import json
 from pathlib import Path
 
 from strata.field.check import check_parcel
+from strata.field.handoff import send
 from strata.field.parcel import DEFAULT_PART, build_parcel, open_parcel
 from strata.field.receive import verify_package
+from strata.field.salvage import open_handoff, prepare_salvage
 from strata.field.uplink import Client, Uplink
 from strata.runtime.errors import VaultError
 
@@ -43,6 +45,18 @@ def parser() -> argparse.ArgumentParser:
     receive.add_argument("--revision", required=True, type=int)
     receive.add_argument("--manifest-sha256", required=True)
     receive.add_argument("--extract", type=Path)
+
+    salvage = commands.add_parser(
+        "salvage", help="Assemble verifiable repair material from locally held files")
+    salvage.add_argument("held", type=Path)
+    salvage.add_argument("handoff", type=Path)
+    salvage.add_argument("--request", required=True, type=Path)
+    salvage.add_argument("--token")
+
+    deliver = commands.add_parser(
+        "deliver", help="Send a prepared repair handoff and record its settlement")
+    deliver.add_argument("handoff", type=Path)
+    deliver.add_argument("--vault-url", required=True)
     return cli
 
 
@@ -62,6 +76,14 @@ def execute(options) -> dict:
         with Client(options.vault_url) as endpoint:
             return Uplink(endpoint).send(parcel, publish=not options.keep_open,
                                          maximum_parts=options.maximum_parts).as_dict()
+    if options.command == "salvage":
+        handoff = prepare_salvage(options.held, options.handoff,
+                                  request_path=options.request, token=options.token)
+        return handoff.descriptor()
+    if options.command == "deliver":
+        handoff = open_handoff(options.handoff)
+        with Client(options.vault_url) as endpoint:
+            return send(handoff, endpoint).as_dict()
     return verify_package(
         options.package, expected_manifest=options.manifest_sha256,
         expected_collection=options.collection, expected_revision=options.revision,
